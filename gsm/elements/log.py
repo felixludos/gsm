@@ -2,111 +2,140 @@ from termcolor import colored
 from typing import Callable
 from omnibelt import Packable, JSONABLE
 from string import Formatter
+from termcolor import colored
 
 from omnibelt import primitive
 
-from ..features import Writable
+from ..features import Writable, Typed
+from ..errors import FormatException
 
 from .manifest import Sanitizable
-from .containers import GamePlayer
+from .containers import GameContainer, ContainerFormatter, ContainerSequence, ContainerGroup
 
 FMT = Formatter()
 
 
-def _process_obj(obj):
-	if isinstance(obj, primitive):
-		return obj
-	info = {}
-	if isinstance(obj, Writable):
-		info.update(obj.get_text_info())
-		info['type'] = obj.get_text_type()
-		info['val'] = obj.get_text_val()
-	# elif isinstance(obj, Typed):
-	# 	info['type'] = obj.get_type()
-	# 	info['val'] = str(obj)
-	else:
-		info['type'] = obj.__class__.__name__
-		info['val'] = str(obj)
+class LogFormatter(ContainerFormatter):
 	
-	return info
+	def __init__(self, flags='default', **other):
+		super().__init__(**other)
+		
+		if flags == 'default':
+			flags = {'error':'red', 'debug':'grey', 'warning':'yellow'}
+		self.flags = flags
+	
+	
+	def draw_sequence(self, entry):
+		color = self.flags.get(getattr(entry, 'flag', None), None)
+		return ''.join([getattr(entry, 'indent_unit', '  ')*getattr(entry, 'indent', 0),
+		                getattr(entry, 'delimiter', ' ').join((term if color is None else colored(term, color))
+		                                                       for term in super().draw_sequence(entry)),
+		                getattr(entry, 'end', '')])
 
 
-def write(*objs, end=None, indent_level=None):
-	if end is not None and len(end):
-		objs = list(objs)
-		objs.append(end)
-	
-	line = {'line': [_process_obj(obj) for obj in objs]}
-	
-	if indent_level is not None:
-		line['level'] = indent_level
-	
-	return line
+	def draw_group(self, group):
+		return getattr(group, 'delimiter', '').join(super().draw_group(group))
 
 
-def writef(txt, *objs, end=None, indent_level=None, **kwobjs):
-	line = []
+
+class GameLogEntry(ContainerSequence):
 	
-	pos = 0
+	def to_string(self, formatter=None):
+		if formatter is None:
+			formatter = LogFormatter()
+		return self.draw(formatter)
+		
 	
-	for pre, info, spec, _ in FMT.parse(txt):
-		
-		line.append(pre)
-		
-		if info is None:
-			continue
-		elif info in kwobjs:
-			obj = kwobjs[info]
-		else:
-			try:
-				obj = objs[int(info)]
-			except ValueError:
-				if info == '':
-					obj = objs[pos]
-					pos += 1
-				else:
-					raise FormatException('Unknown object info, type {}: {}'.format(type(info), info))
-		
-		if spec is not None and len(spec):
-			obj = obj.__format__(spec)
-		
-		line.append(obj)
-	
-	return write(*line, end=end, indent_level=indent_level)
+	def __str__(self):
+		return self.to_string()
 
 
-class GameLog(Sanitizable, Packable):
-	
-	
-	def sanitize(self, player, manifest, sanitize):
-		raise NotImplementedError
-	
-	def _add_line(self, line):
-		targets = self.targets
-		if self.targets is not None and len(self.targets):
-			line['targets'] = [(t.name if isinstance(t, GamePlayer) else t) for t in targets]
-		self.log.append(line)
-		for update in self.update.values():
-			update.append(line)
-		self.targets = None
-	
-	def write(self, *objs, end=None, indent_level=None):
-		if end is None:
-			end = self.end
-		if indent_level is None:
-			indent_level = self.indent_level
+
+class GameLog(ContainerGroup):
+	def __init__(self, *args, pointers=None, **kwargs):
+		if pointers is None:
+			pointers = {}
+		super().__init__(*args, **kwargs)
+		self.pointers = pointers
 		
-		line = write(*objs, end=end, indent_level=indent_level)
-		return self._add_line(line)
 	
-	def writef(self, txt, *objs, end=None, indent_level=None, **kwobjs):
+	def get_update(self, player: 'GamePlayer') -> 'GameLog':
+		ref = self.pointers.get(player, 0)
+		update = self[ref:]
 		
-		if end is None:
-			end = self.end
-		if indent_level is None:
-			indent_level = self.indent_level
+		self.pointers[player] = len(self)
 		
-		line = writef(txt, *objs, end=end, indent_level=indent_level, **kwobjs)
-		return self._add_line(line)
+		return update
+	
+	
+	def get_full(self, player: 'GamePlayer' = None) -> 'GameLog':
+		return self
+	
+	
+	def to_string(self, log=None, player=None, formatter=None):
+		if log is None:
+			log = self.get_full(player=player)
+		
+		if formatter is None:
+			formatter = LogFormatter()
+		
+		return formatter.draw_group(log)
+		
+		
+	def __str__(self):
+		return self.to_string()
+	
+	
+	@classmethod
+	def _process_line(cls, objs, end='\n', flag=None, **info):
+		return GameLogEntry(objs, end=end, flag=flag, **info)
+	
+	
+	def debug(self, *objs, end='\n'):
+		return self.write(*objs, end=end, flag='debug')
+
+	
+	def error(self, *objs, end='\n'):
+		return self.write(*objs, end=end, flag='error')
+	
+	
+	def warning(self, *objs, end='\n'):
+		return self.write(*objs, end=end, flag='warning')
+	
+	
+	def write(self, *objs, end='\n', flag=None, info={}):
+		return self.append(self._process_line(objs, end=end, flag=flag, **info))
+	
+	
+	def writef(self, txt, *objs, end='\n', flag=None, info={}, **kwobjs):
+		
+		line = []
+		
+		pos = 0
+		
+		for pre, info, spec, _ in FMT.parse(txt):
+			
+			line.append(pre)
+			
+			if info is None:
+				continue
+			elif info in kwobjs:
+				obj = kwobjs[info]
+			else:
+				try:
+					obj = objs[int(info)]
+				except ValueError:
+					if info == '':
+						obj = objs[pos]
+						pos += 1
+					else:
+						raise FormatException(f'Unknown object info, type {type(info)}: {info}')
+			
+			if spec is not None and len(spec):
+				obj = obj.__format__(spec)
+			
+			line.append(obj)
+		
+		return self.append(self._process_line(line, end=end, flag=flag, **info))
 
 

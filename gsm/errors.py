@@ -1,0 +1,6 @@
+
+
+
+class FormatException(Exception):
+	pass
+

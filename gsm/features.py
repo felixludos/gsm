@@ -63,6 +63,10 @@ class Writable(object):
 	'''
 	
 	
+	def to_string(self, formatter):
+		raise NotImplementedError
+	
+	
 	def get_text_val(self):
 		'''
 		The "text value" is the string of data that should be directly printable
@@ -90,3 +94,4 @@ class Writable(object):
 		:rtype: dict(str -> {str, int, float, bool})
 		'''
 		return {}
+
