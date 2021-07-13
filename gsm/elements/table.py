@@ -1,5 +1,5 @@
 
-from typing import Union, Dict, List, Any, Optional, NoReturn, NewType
+from typing import Union, Dict, List, Any, Optional, NoReturn, NewType, TypeVar, Generic
 from collections import OrderedDict
 from omnibelt import Named_Registry, Packable, get_printer, primitive, PRIMITIVE, pack, JSONABLE
 
@@ -11,6 +11,10 @@ from .actions import GameController, GameAction
 
 prt = get_printer(__file__)
 
+
+
+T = TypeVar('T')
+Message = Generic[T]
 
 
 class GameShelf(Named_Registry):
@@ -187,7 +191,7 @@ class GameTable(Packable):
 		self._process_controllers(self._game.begin())
 
 	
-	def take_action(self, user: USER, action: Union[int, str, List[PRIMITIVE]], **info) -> GameStatus:
+	def take_action(self, user: USER, action: Union[int, str, List[PRIMITIVE]], **info) -> Message[GameStatus]:
 		
 		pick = self._process_action(user, action)
 		
@@ -199,17 +203,17 @@ class GameTable(Packable):
 		return self.get_status(user)
 
 	
-	def get_status(self, user: USER) -> GameStatus:
+	def get_status(self, user: USER) -> Message[GameStatus]:
 		if user in self._advisors:
 			user = self._advisors[user]
 		
 		if user not in self._status:
 			self._status[user] = self._create_status(user)
-		return self._status[user]
+		return self._package_message(user, self._status[user])
 		
 	
-	def full_log(self, user: USER) -> GameLog:
-		return self._log.get_full(self._find_player(user))
+	def full_log(self, user: USER) -> Message[GameLog]:
+		return self._package_message(user, self._log.get_full(self._find_player(user)))
 	
 	
 	def cheat(self, player: USER, code: str = None):
@@ -218,7 +222,7 @@ class GameTable(Packable):
 
 
 	# region Status
-	def _package_message(self, msg: Packable) -> JSONABLE:
+	def _package_message(self, user: USER, msg: T) -> Message[T]:
 		return pack(msg)
 	
 	
