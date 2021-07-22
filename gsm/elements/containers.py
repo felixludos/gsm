@@ -1,41 +1,47 @@
+from typing import Union, List, Dict
 from termcolor import colored
 from omnibelt import Packable, Hashable, primitive
 
+from .setting import DEFAULT_SETTING
 from ..features import Named, Typed, Writable
-from .manifest import Sanitizable
+from .messaging import Sendable
 
 
-
-class GameContainer(Sanitizable, Packable):
+class GameContainer(Sendable):
 	def __init__(self, *args, **info):
 		super().__init__(*args)
 		self.__dict__.update(info)
 
 
-	def sanitize(self, player, manifest, sanitize):
-		
-		
-		
-		raise NotImplementedError
 
-
-
-class ActionElement(GameContainer):
+class ActionElement(Hashable, GameContainer):
 	def verify_action(self, obj):
 		raise NotImplementedError
 
 
 
 class ContainerFormatter:
-	def __init__(self, colors='default', prefixes='default'):
+	def __init__(self, colors='default', prefixes='default', color_system=None):
 		super().__init__()
 		if colors == 'default':
-			colors = {'player': 'green'}
+			colors = {'player': 'blue'}
 		self.colors = colors
 
 		if prefixes == 'default':
 			prefixes = {'player': 'PLYR'}
 		self.prefixes = prefixes
+		
+		if color_system is None:
+			color_system = DEFAULT_SETTING.get('color', 'console')
+
+		self.color_system = color_system
+	
+	
+	def color_text(self, text, color):
+		if self.color_system == 'jupyter':
+			color = '{' + color + '}'
+			return f'\(\color{color} {{' + f'{text}' + '}\)'
+		return colored(text, color=color)
 	
 	
 	def draw_object(self, obj):
@@ -58,12 +64,11 @@ class ContainerFormatter:
 			typ = obj.__class__.__name__
 			val = str(obj)
 		
-		color = info.get('color', self.colors.get(typ, 'blue'))
+		color = info.get('color', self.colors.get(typ, 'green'))
 		
-		prefixes = self.prefixes.get('prefixes', None)
-		if prefixes is not None:
+		if self.prefixes is not None:
 			val = f'{self.prefixes.get(typ, typ.upper())}:{val}'
-		return str(val) if color is None else colored(val, color=color)
+		return str(val) if color is None else self.color_text(val, color=color)
 	
 	
 	def draw_sequence(self, seq):
@@ -87,7 +92,7 @@ class ContainerSequence(GameContainer, list):
 	_info_key = 'info'
 	
 	@classmethod
-	def __create__(cls, data):
+	def __create__(cls, data, unpack_member):
 		return cls()
 	
 	
@@ -97,7 +102,7 @@ class ContainerSequence(GameContainer, list):
 	
 	
 	def __unpack__(self, data, unpack_member):
-		self.extend(unpack_member(x) for x in data.get(self._content_key, []))
+		self.extend([unpack_member(x) for x in data.get(self._content_key, [])])
 		super().__unpack__(data.get(self._info_key, {}), unpack_member)
 	
 	# endregion
@@ -145,6 +150,16 @@ class GameSettings(GameContainer):
 
 class GameObservation(GameContainer):
 	pass
+
+
+
+class GameResult(GameContainer):
+	def __init__(self, winner: Union['GamePlayer', List['GamePlayer']] = None,
+	             scores: Dict['GamePlayer', Union[int, float]] = None,
+	             **kwargs):
+		super().__init__(**kwargs)
+		self.winner = winner
+		self.scores = scores
 
 
 

@@ -1,22 +1,29 @@
 from typing import Union
+import inspect
 from itertools import chain, product
 from omnibelt import Packable, primitive, Hashable
 
 from ..features import Named
-from .containers import GameContainer, ContainerSequence, ContainerGroup, ContainerMultiGroup
-
-
-class ActionElement(Hashable, GameContainer):
-	pass
-
+from .containers import GameContainer, ActionElement, \
+	ContainerSequence, ContainerGroup, ContainerMultiGroup, ContainerFormatter
 
 
 class GameAction(Hashable, ContainerSequence):
 	_content_key = 'action'
 	
-	def __init__(self, terms, group=None):
+	def __init__(self, *terms, group=None):
 		super().__init__(terms)
 		self.group = group
+	
+	
+	def to_string(self, formatter=None):
+		if formatter is None:
+			formatter = ActionFormatter()
+		return formatter.draw_sequence(self)
+	
+	
+	def __str__(self):
+		return self.to_string()
 		
 		
 	def __eq__(self, action):
@@ -25,9 +32,19 @@ class GameAction(Hashable, ContainerSequence):
 
 
 class GameActionGroup(Named, ContainerGroup):
-	def __init__(self, name, desc=None):
+	def __init__(self, name=None, desc=None):
 		super().__init__(name=name)
 		self.desc = desc
+	
+	
+	def to_string(self, formatter=None):
+		if formatter is None:
+			formatter = ActionFormatter()
+		return formatter.draw_group(self)
+	
+	
+	def __str__(self):
+		return self.to_string()
 	
 	
 	def find(self, idx=None, pick=None, **unused):
@@ -48,56 +65,123 @@ class GameActionGroup(Named, ContainerGroup):
 	def _process_action(self, terms):
 		if isinstance(terms, GameAction):
 			return terms
-		return GameAction([self._process_elements(term) for term in terms], group=self)
+		return GameAction(*[self._process_elements(term) for term in terms], group=self)
 	
 	
 	@staticmethod
 	def _expand_actions(obj):
 		def _expand(code):
-			# if isinstance(code, (list, set)) and len(code) == 1:
-			# 	return _expand(next(iter(code)))
-			
-			# if isinstance(code, (ActionElement, *primitive)):
-			# 	return [code]
-			
 			# tuple case
 			if isinstance(code, tuple):
 				return list(product(*map(_expand, code)))
 			if isinstance(code, (list, set)):
-				return chain(*map(_expand, code))
+				return list(map(_expand, code))
 			
 			# base case
-			return [code]
-		
+			return [code, ]
+		def _pre(bla):
+			if isinstance(bla, (list, set)):
+				return [_pre(b) for b in bla]
+			if not isinstance(bla, tuple):
+				bla = (bla,)
+			return bla
 		def _flatten(bla):
+			if isinstance(bla, list):
+				out = []
+				for b in bla:
+					if isinstance(b, list):
+						out.extend(_flatten(b))
+					else:
+						out.append(_flatten(b))
+				return out
 			output = []
 			for item in bla:
-				output.extend(_flatten(item) if isinstance(item, list) else [item])
+				output.extend(item if isinstance(item, list) else [item])
 			return tuple(output)
 		
+		obj = _pre(obj)
 		code = _expand(obj)
-		return list(map(_flatten, code))
+		return _flatten(code)
 	
 	
 	def _process_group(self, actions):
-		return [self._process_action(action) for action in self._expand_actions(actions)]
+		done = [action for action in actions if isinstance(action, GameAction)]
+		todo = [action for action in actions if not isinstance(action, GameAction)]
+		expanded = done + self._expand_actions(todo)
+		# expanded = self._expand_actions(actions)
+		return [self._process_action(action) for action in expanded]
 	
+	
+	def add(self, *terms):
+		self.append(terms)
+		return self
+		
 	
 	def append(self, action):
-		action = self._process_action(action)
-		super().append(action)
+		self.extend([action])
 		return self
 	
 	
 	def extend(self, actions):
+		# if inspect.isgeneratorfunction(actions):
+		# 	print(actions)
+		# 	actions = list(actions)
 		actions = self._process_group(actions)
 		super().extend(actions)
 		return self
 
 
 
+class ActionFormatter(ContainerFormatter):
+	def draw_sequence(self, seq):
+		return getattr(seq, 'delimiter', ' - ').join(super().draw_sequence(seq))
+	
+	
+	def draw_group(self, group, index_offset=0):
+		actions = [f'{i+index_offset:>4} : {action}' for i, action in enumerate(super().draw_group(group))]
+		title = f'{group.name}: {group.desc}'
+		return '\n'.join([title, *actions])
+	
+	
+	def draw_multigroup(self, multi):
+		offset = 0
+		groups = []
+		for group in multi:
+			groups.append(self.draw_group(group, index_offset=offset))
+			offset += len(group)
+		
+		return getattr(multi, 'separator', _DEFAULT_GROUP_SEPARATOR).join(groups)
+
+
+
+# _DEFAULT_GROUP_SEPARATOR = '\n' + '-'*20 + '\n'
+_DEFAULT_GROUP_SEPARATOR = '\n'
+
+
+
 class GameController(ContainerMultiGroup):
 	_content_key = 'groups'
+	
+	
+	def total_size(self):
+		return sum(map(len, self))
+	
+	
+	def to_string(self, formatter=None):
+		if formatter is None:
+			formatter = ActionFormatter()
+		return formatter.draw_multigroup(self)
+	
+	
+	def __str__(self):
+		return self.to_string()
+	
+	
+	def add_group(self, name, desc=None, actions=None):
+		group = self.new_group(name, desc=desc)
+		if actions is not None:
+			group.extend(actions)
+		return self
 	
 	
 	def new_group(self, name, desc=None):

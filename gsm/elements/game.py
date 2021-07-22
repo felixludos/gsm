@@ -1,22 +1,33 @@
-
-from typing import Union, Dict, List, Any, Optional, NoReturn
+from collections import OrderedDict
+from typing import Union, Mapping, List, Any, Optional, NoReturn
 from omnibelt import Packable, get_printer, json_pack, json_unpack, JSONABLE
 
-from ..util import USER
-from .containers import GameContainer, GameSettings, GameObservation, FullGameObservation, GamePlayer
-from .manifest import GameManifest
+from .roles import User, Player, Advisor, Spectator
+from .containers import GameContainer, GameSettings, GameObservation, FullGameObservation, GamePlayer, GameResult
 from .log import GameLog
 from .actions import GameAction, GameController
-from .table import register_game
+from .shelf import register_game
 
 prt = get_printer(__file__)
 
 
 
 class Game(GameContainer):
+	def __init__(self, **settings: Optional[Mapping[str, Any]]):
+		super().__init__()
+		# self.settings = self.get_component('settings')(**settings)
+		#
+		# self.state = self.get_component('state')
+		# self.manifest = self.get_component('manifest')
+		# self.log = self.get_component('log')
+		
+		self.log = None
+		self.players = None
+		self.settings = self.create_settings(**settings)
+		self.state = self.create_state()
+	
 	
 	# region Subclasses
-	
 	def __init_subclass__(cls, name=None, **kwargs):
 		super().__init_subclass__(name=name)
 		# cls._component_cls = dict(manifest=GameManifest, log=GameLog, state=GameContainer,
@@ -34,27 +45,12 @@ class Game(GameContainer):
 	@classmethod
 	def get_name(cls):
 		return cls._name
-		
-		
 	# endregion
-	
-	def __init__(self, **settings: Optional[Dict[str, Any]]):
-		super().__init__()
-		# self.settings = self.get_component('settings')(**settings)
-		#
-		# self.state = self.get_component('state')
-		# self.manifest = self.get_component('manifest')
-		# self.log = self.get_component('log')
-		
-		self.log = None
-		self.players = None
-		self.settings = self._create_settings(settings)
-		self.state = self._create_state()
 	
 	
 	# region Setup
 	@staticmethod
-	def create_settings(*args, **settings: Dict[str, Any]) -> GameSettings:
+	def create_settings(*args, **settings: Mapping[str, Any]) -> GameSettings:
 		return GameSettings(*args, **settings)
 	
 	
@@ -64,7 +60,7 @@ class Game(GameContainer):
 	
 	
 	@classmethod
-	def create_players(cls, users: Dict[str, Dict[str, Any]]) -> List[GamePlayer]:
+	def create_players(cls, users: Mapping[str, Mapping[str, Any]]) -> List[GamePlayer]:
 		return [cls.create_player(name=name, **info) for name, info in users.items()]
 	
 	
@@ -85,10 +81,10 @@ class Game(GameContainer):
 		return self.log
 	
 	
-	def process_players(self, users: Dict[USER, Dict[str, Any]]) -> Dict[USER, GamePlayer]:
+	def process_players(self, users: Mapping[User, Mapping[str, Any]]) -> Mapping[User, GamePlayer]:
 		players = self.create_players(users)
 		self.players = players
-		return dict(zip(users, players))
+		return OrderedDict(zip(users, players))
 	# endregion
 	
 	
@@ -101,15 +97,15 @@ class Game(GameContainer):
 		return json_pack(self)
 	
 	
-	def begin_game(self) -> Dict[GamePlayer, GameController]:
+	def begin_game(self) -> Mapping[GamePlayer, GameController]:
 		raise NotImplementedError
 	
 	
-	def end_game(self) -> GameContainer:
+	def end_game(self) -> GameResult:
 		raise NotImplementedError
 	
 	
-	def take_action(self, player: GamePlayer, action: GameAction) -> Dict[GamePlayer, GameController]:
+	def take_action(self, player: GamePlayer, action: GameAction) -> Mapping[GamePlayer, GameController]:
 		raise NotImplementedError
 		
 	
