@@ -43,6 +43,11 @@ class Typed(object):
 			obj_type = cls.__name__
 		cls.obj_type = obj_type
 	
+	def __init__(self, *args, obj_type=None, **kwargs):
+		super().__init__()
+		if obj_type is None:
+			obj_type = self.get_type()
+		self.obj_type = obj_type
 	
 	@classmethod
 	def get_type(cls):

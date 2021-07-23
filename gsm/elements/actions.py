@@ -1,11 +1,13 @@
 from typing import Union
 import inspect
 from itertools import chain, product
-from omnibelt import Packable, primitive, Hashable
+from omnibelt import Packable, primitive, Hashable, get_printer
 
 from ..features import Named
 from .containers import GameContainer, ActionElement, \
 	ContainerSequence, ContainerGroup, ContainerMultiGroup, ContainerFormatter
+
+prt = get_printer(__name__)
 
 
 class GameAction(Hashable, ContainerSequence):
@@ -161,6 +163,24 @@ _DEFAULT_GROUP_SEPARATOR = '\n'
 
 class GameController(ContainerMultiGroup):
 	_content_key = 'groups'
+	
+	def __send__(self, user, obj):
+		
+		
+		
+		total = obj.total_size()
+		if total == 0:
+			prt.error(f'Sending a game controller without any actions')
+		
+		idx = 0
+		for group in obj:
+			for action in group:
+				action.index = idx
+				idx += 1
+		
+		# print(idx)
+		
+		return obj
 	
 	
 	def total_size(self):

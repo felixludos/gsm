@@ -129,4 +129,7 @@ class Game(GameContainer):
 		raise NotImplementedError
 
 
+	def get_gui_data(self):
+		return {}
+
 

@@ -7,6 +7,7 @@ class DummyGame(Game, name='dummy'):
 		if seed is None:
 			seed = random.getrandbits(32)
 		random.seed(seed)
+		random.seed(10)
 		super().__init__(include_objects=include_objects, seed=seed)
 		
 

@@ -92,7 +92,7 @@ class ContainerSequence(GameContainer, list):
 	_info_key = 'info'
 	
 	@classmethod
-	def __create__(cls, data, unpack_member):
+	def __create__(cls, data, original, unpack_member):
 		return cls()
 	
 	
@@ -101,9 +101,9 @@ class ContainerSequence(GameContainer, list):
 		        self._info_key: super().__pack__(pack_member)}
 	
 	
-	def __unpack__(self, data, unpack_member):
+	def __unpack__(self, data, original, unpack_member):
 		self.extend([unpack_member(x) for x in data.get(self._content_key, [])])
-		super().__unpack__(data.get(self._info_key, {}), unpack_member)
+		super().__unpack__(data.get(self._info_key, {}), original, unpack_member)
 	
 	# endregion
 
@@ -177,7 +177,6 @@ class GameObject(Writable, Typed, ActionElement, GameContainer):
 	def __init__(self, **kwargs):
 		super().__init__(**kwargs)
 		self._reset_unique_ID()
-		
 		
 	def _reset_unique_ID(self, seed=None):
 		if seed is None:
