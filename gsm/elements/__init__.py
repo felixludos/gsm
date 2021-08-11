@@ -8,3 +8,4 @@ from .shelf import game_shelf, register_game
 from .table import GameTable, GameStatus
 
 from .game import Game
+

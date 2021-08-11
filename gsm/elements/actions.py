@@ -140,7 +140,8 @@ class ActionFormatter(ContainerFormatter):
 	
 	
 	def draw_group(self, group, index_offset=0):
-		actions = [f'{i+index_offset:>4} : {action}' for i, action in enumerate(super().draw_group(group))]
+		actions = [f'{action.idx:>4} : {msg}' for i, (action, msg) in enumerate(zip(group,
+		                                                                            super().draw_group(group)))]
 		title = f'{group.name}: {group.desc}'
 		return '\n'.join([title, *actions])
 	
@@ -175,7 +176,7 @@ class GameController(ContainerMultiGroup):
 		idx = 0
 		for group in obj:
 			for action in group:
-				action.index = idx
+				action.idx = idx
 				idx += 1
 		
 		# print(idx)

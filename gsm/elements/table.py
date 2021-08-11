@@ -194,7 +194,7 @@ class GameTable(Packable):
 		user = self._get_user(user)
 		assert isinstance(user, Player)
 		
-		pick = self._process_action(user.get_obj(), action)
+		pick = self._process_action(user, action)
 		assert pick is not None # invalid action error
 		
 		self._process_controllers(self._game.take_action(user.get_obj(), pick))

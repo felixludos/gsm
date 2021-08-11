@@ -30,8 +30,8 @@ class Messaging(Packer):
 		return super()._dispatch_pack(entry, obj)
 	
 	
-	def _dispatch_unpack(self, entry, obj, data):
-		obj = super()._dispatch_unpack(entry, obj, data)
+	def _dispatch_unpack(self, entry, obj, data, original=None):
+		obj = super()._dispatch_unpack(entry, obj, data, original=original)
 		if isinstance(obj, Sendable):
 			obj = obj.__recover__(obj)
 		return obj
